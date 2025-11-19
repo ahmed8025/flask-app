@@ -11,6 +11,12 @@ pipeline {
     NODE_VERSION = '16.20.0'
   }
 
+  tools {
+    // Make sure these tool names exist in Manage Jenkins -> Global Tool Configuration
+    // If you don't use Maven, remove this block or adjust.
+    maven 'Maven3.9.11'
+  }
+
   stages {
     stage('Checkout') {
       steps {
