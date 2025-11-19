@@ -16,7 +16,6 @@ pipeline {
             steps {
                 sh 'python3 -m venv ${VENV_DIR}'
                 sh 'source ${VENV_DIR}/bin/activate && pip install --upgrade pip'
-                sh 'if [ -f requirements.txt ]; then source ${VENV_DIR}/bin/activate && pip install -r requirements.txt; fi'
             }
         }
 
