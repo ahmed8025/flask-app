@@ -16,7 +16,6 @@ pipeline {
 
         stage('Setup Python') {
             steps {
-                // Create virtual environment and install dependencies
                 sh '''
                     python3 -m venv venv
                     source venv/bin/activate
@@ -30,7 +29,6 @@ pipeline {
 
         stage('Test') {
             steps {
-                // Run pytest if tests exist
                 sh '''
                     source venv/bin/activate
                     if [ -d tests ]; then
@@ -44,7 +42,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             environment {
-                SONARQUBE = 'SonarQube' // replace with your SonarQube installation name in Jenkins
+                SONARQUBE = 'SonarQube' // your Jenkins SonarQube instance name
             }
             steps {
                 script {
@@ -65,17 +63,15 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo "Deploying Flask app..."
-                // Add deployment steps here (e.g., docker build/run or scp to server)
+                // Add your deployment steps here
             }
         }
     }
 
     post {
         always {
-            node {
-                echo 'Archiving artifacts...'
-                archiveArtifacts artifacts: '**/*', allowEmptyArchive: true
-            }
+            echo 'Archiving artifacts...'
+            archiveArtifacts artifacts: '**/*', allowEmptyArchive: true
         }
         success {
             echo 'Pipeline succeeded!'
