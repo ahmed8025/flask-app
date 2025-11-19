@@ -12,7 +12,7 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         timeout(time: 1, unit: 'HOURS')
-        ansiColor('xterm')
+        //ansiColor('xterm')
     }
 
     stages {
