@@ -1,95 +1,96 @@
 pipeline {
-  agent any
+    agent any
 
-  parameters {
-    booleanParam(name: 'executeTests', defaultValue: true, description: 'Run tests?')
-    string(name: 'DEPLOY_ENV', defaultValue: 'staging', description: 'Deploy environment')
-  }
-
-  environment {
-    // optional environment variables
-    NODE_VERSION = '16.20.0'
-  }
-
-  tools {
-    // Make sure these tool names exist in Manage Jenkins -> Global Tool Configuration
-    // If you don't use Maven, remove this block or adjust.
-    maven 'Maven3.9.11'
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        // If using GitHub locally, you can use a local file URL (file:///path/to/repo)
-        git url: 'https://github.com/ahmed8025/flask-app.git', branch: 'main'
-      }
+    environment {
+        // SonarQube environment variables injected by withSonarQubeEnv
+        SONAR_HOST_URL = credentials('sonarqube-url')       // Your SonarQube URL
+        SONAR_AUTH_TOKEN = credentials('sonarqube-token')  // SonarQube token
+        PYTHON_VERSION = 'python3'
+        VENV_DIR = 'venv'
     }
 
-    stage('Build') {
-      steps {
-        echo 'Building...'
-        // Example for Maven builds:
-        sh 'mvn -B -DskipTests package || true'
-      }
+    options {
+        skipDefaultCheckout(true)
+        timeout(time: 1, unit: 'HOURS')
+        ansiColor('xterm')
     }
 
-    stage('Static Code Analysis (SonarQube)') {
-      steps {
-        script {
-          // Use withSonarQubeEnv 'SonarQube' (the name you configured in Jenkins)
-          withSonarQubeEnv('SonarQube') {
-            // If using Maven:
-            sh "mvn sonar:sonar -Dsonar.projectKey=jenkins-pipeline-lab -Dsonar.host.url=${env.SONAR_HOST_URL} -Dsonar.login=${env.SONAR_AUTH_TOKEN}"
+    stages {
 
-            // OR, if using sonar-scanner CLI (uncomment and adjust):
-            // sh "sonar-scanner -Dsonar.projectKey=jenkins-pipeline-lab -Dsonar.sources=./src -Dsonar.host.url=${env.SONAR_HOST_URL} -Dsonar.login=${env.SONAR_AUTH_TOKEN}"
-          }
-        }
-      }
-    }
-
-    // Optional: wait for quality gate (this waits for Sonar analysis to finish and returns result)
-    stage('Quality Gate') {
-      steps {
-        script {
-          timeout(time: 5, unit: 'MINUTES') {
-            def qg = waitForQualityGate()   // requires SonarQube plugin
-            echo "Quality Gate status: ${qg.status}"
-            if (qg.status != 'OK') {
-              error "Pipeline aborted due to SonarQube Quality Gate status: ${qg.status}"
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
             }
-          }
         }
-      }
+
+        stage('Setup Python Environment') {
+            steps {
+                echo "Creating virtual environment and installing dependencies..."
+                sh """
+                    ${PYTHON_VERSION} -m venv ${VENV_DIR}
+                    ./${VENV_DIR}/bin/pip install --upgrade pip
+                    ./${VENV_DIR}/bin/pip install -r requirements.txt
+                """
+            }
+        }
+
+        stage('Static Code Analysis (SonarQube)') {
+            steps {
+                script {
+                    withSonarQubeEnv('SonarQube') {
+                        sh """
+                            ./venv/bin/sonar-scanner \
+                                -Dsonar.projectKey=jenkinspipeline-flask \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=$SONAR_HOST_URL \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    // Only works if your SonarQube plugin supports waitForQualityGate
+                    timeout(time: 1, unit: 'HOURS') {
+                        waitForQualityGate abortPipeline: true
+                    }
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo "Running unit tests..."
+                sh """
+                    ./${VENV_DIR}/bin/python -m unittest discover -s tests
+                """
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo "Deploying Flask app..."
+                sh """
+                    # Example: run Flask app (adjust as per your deployment)
+                    ./${VENV_DIR}/bin/python app.py &
+                """
+            }
+        }
     }
 
-    stage('Test') {
-      when {
-        expression { return params.executeTests == true }
-      }
-      steps {
-        echo 'Running tests...'
-        sh 'mvn test'
-      }
+    post {
+        always {
+            echo 'Archiving workspace artifacts...'
+            archiveArtifacts artifacts: '**/*', allowEmptyArchive: true
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs for details.'
+        }
     }
-
-    stage('Deploy') {
-      when {
-        branch 'main'
-      }
-      steps {
-        echo "Deploying to ${params.DEPLOY_ENV}"
-        // deployment steps go here
-      }
-    }
-  }
-
-  post {
-    always {
-      // Archive any reports for your lab submission
-      archiveArtifacts artifacts: '**/target/*.jar, **/target/site/**, **/sonar-report/**/*', allowEmptyArchive: true
-    }
-    success { echo 'Pipeline completed successfully.' }
-    failure { echo 'Pipeline failed.' }
-  }
 }
