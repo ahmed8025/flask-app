@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         VENV_DIR = 'venv'
+        SONARQUBE = 'SonarQube' // Name of the SonarQube installation in Jenkins
     }
 
     stages {
@@ -19,9 +20,17 @@ pipeline {
             }
         }
 
-        stage('Run') {
+        stage('Run Application') {
             steps {
                 sh 'source ${VENV_DIR}/bin/activate && python app2.py'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE}") {
+                    sh 'source ${VENV_DIR}/bin/activate && sonar-scanner'
+                }
             }
         }
     }
