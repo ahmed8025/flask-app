@@ -2,82 +2,37 @@ pipeline {
     agent any
 
     environment {
-        VENV_DIR = "${WORKSPACE}/venv"
-        PYTHON = "${VENV_DIR}/bin/python"
-        PIP = "${VENV_DIR}/bin/pip"
+        VENV_DIR = 'venv'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'main', url: 'https://github.com/YOUR_USERNAME/YOUR_REPO.git'
             }
         }
 
         stage('Setup Python') {
             steps {
-                sh '''
-                    python3 -m venv venv
-                    source venv/bin/activate
-                    pip install --upgrade pip
-                    if [ -f requirements.txt ]; then
-                        pip install -r requirements.txt
-                    fi
-                '''
+                sh 'python3 -m venv ${VENV_DIR}'
+                sh 'source ${VENV_DIR}/bin/activate && pip install --upgrade pip'
+                sh 'if [ -f requirements.txt ]; then source ${VENV_DIR}/bin/activate && pip install -r requirements.txt; fi'
             }
         }
 
-        stage('Test') {
+        stage('Run') {
             steps {
-                sh '''
-                    source venv/bin/activate
-                    if [ -d tests ]; then
-                        pytest tests
-                    else
-                        echo "No tests directory found, skipping tests."
-                    fi
-                '''
-            }
-        }
-
-        stage('SonarQube Analysis') {
-            environment {
-                SONARQUBE = 'SonarQube' // your Jenkins SonarQube instance name
-            }
-            steps {
-                script {
-                    withSonarQubeEnv('SonarQube') {
-                        sh '''
-                            source venv/bin/activate
-                            sonar-scanner \
-                                -Dsonar.projectKey=flask-app \
-                                -Dsonar.sources=. \
-                                -Dsonar.host.url=$SONAR_HOST_URL \
-                                -Dsonar.login=$SONAR_AUTH_TOKEN
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                echo "Deploying Flask app..."
-                // Add your deployment steps here
+                sh 'source ${VENV_DIR}/bin/activate && python app2.py'
             }
         }
     }
 
     post {
-        always {
-            echo 'Archiving artifacts...'
-            archiveArtifacts artifacts: '**/*', allowEmptyArchive: true
-        }
         success {
-            echo 'Pipeline succeeded!'
+            echo 'Pipeline finished successfully!'
         }
         failure {
-            echo 'Pipeline failed!'
+            echo 'Pipeline failed. Check logs.'
         }
     }
 }
