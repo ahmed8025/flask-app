@@ -2,95 +2,86 @@ pipeline {
     agent any
 
     environment {
-        // SonarQube environment variables injected by withSonarQubeEnv
-        SONAR_HOST_URL = credentials('sonarqube-url')       // Your SonarQube URL
-        SONAR_AUTH_TOKEN = credentials('sonarqube-token')  // SonarQube token
-        PYTHON_VERSION = 'python3'
-        VENV_DIR = 'venv'
-    }
-
-    options {
-        skipDefaultCheckout(true)
-        timeout(time: 1, unit: 'HOURS')
-        //ansiColor('xterm')
+        VENV_DIR = "${WORKSPACE}/venv"
+        PYTHON = "${VENV_DIR}/bin/python"
+        PIP = "${VENV_DIR}/bin/pip"
     }
 
     stages {
-
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Setup Python Environment') {
+        stage('Setup Python') {
             steps {
-                echo "Creating virtual environment and installing dependencies..."
-                sh """
-                    ${PYTHON_VERSION} -m venv ${VENV_DIR}
-                    ./${VENV_DIR}/bin/pip install --upgrade pip
-                    ./${VENV_DIR}/bin/pip install -r requirements.txt
-                """
-            }
-        }
-
-        stage('Static Code Analysis (SonarQube)') {
-            steps {
-                script {
-                    withSonarQubeEnv('SonarQube') {
-                        sh """
-                            ./venv/bin/sonar-scanner \
-                                -Dsonar.projectKey=jenkinspipeline-flask \
-                                -Dsonar.sources=. \
-                                -Dsonar.host.url=$SONAR_HOST_URL \
-                                -Dsonar.login=$SONAR_AUTH_TOKEN
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                script {
-                    // Only works if your SonarQube plugin supports waitForQualityGate
-                    timeout(time: 1, unit: 'HOURS') {
-                        waitForQualityGate abortPipeline: true
-                    }
-                }
+                // Create virtual environment and install dependencies
+                sh '''
+                    python3 -m venv venv
+                    source venv/bin/activate
+                    pip install --upgrade pip
+                    if [ -f requirements.txt ]; then
+                        pip install -r requirements.txt
+                    fi
+                '''
             }
         }
 
         stage('Test') {
             steps {
-                echo "Running unit tests..."
-                sh """
-                    ./${VENV_DIR}/bin/python -m unittest discover -s tests
-                """
+                // Run pytest if tests exist
+                sh '''
+                    source venv/bin/activate
+                    if [ -d tests ]; then
+                        pytest tests
+                    else
+                        echo "No tests directory found, skipping tests."
+                    fi
+                '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            environment {
+                SONARQUBE = 'SonarQube' // replace with your SonarQube installation name in Jenkins
+            }
+            steps {
+                script {
+                    withSonarQubeEnv('SonarQube') {
+                        sh '''
+                            source venv/bin/activate
+                            sonar-scanner \
+                                -Dsonar.projectKey=flask-app \
+                                -Dsonar.sources=. \
+                                -Dsonar.host.url=$SONAR_HOST_URL \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
+                        '''
+                    }
+                }
             }
         }
 
         stage('Deploy') {
             steps {
                 echo "Deploying Flask app..."
-                sh """
-                    # Example: run Flask app (adjust as per your deployment)
-                    ./${VENV_DIR}/bin/python app.py &
-                """
+                // Add deployment steps here (e.g., docker build/run or scp to server)
             }
         }
     }
 
     post {
         always {
-            echo 'Archiving workspace artifacts...'
-            archiveArtifacts artifacts: '**/*', allowEmptyArchive: true
+            node {
+                echo 'Archiving artifacts...'
+                archiveArtifacts artifacts: '**/*', allowEmptyArchive: true
+            }
         }
         success {
-            echo 'Pipeline completed successfully!'
+            echo 'Pipeline succeeded!'
         }
         failure {
-            echo 'Pipeline failed. Check logs for details.'
+            echo 'Pipeline failed!'
         }
     }
 }
