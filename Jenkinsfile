@@ -6,9 +6,6 @@ pipeline {
   environment {
     NODE_VERSION = '16.20.0'
   }
-  tools {
-    maven 'Maven3.8'
-  }
   stages {
     stage('Build') {
       steps {
